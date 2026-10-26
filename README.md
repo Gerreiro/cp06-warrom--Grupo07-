@@ -390,5 +390,3 @@ Nossas escolhas privilegiaram integridade de saldos, segurança das consultas, n
 - Corrigir a taxa TED conforme o contrato e executar testes unitários e de regressão (`./mvnw clean test`) antes da próxima liberação.
 
 ---
-
-**Nota:** documento preparado com base nas decisões registradas pelo grupo e nas consequências apresentadas nos enunciados das seis rodadas. As correções de código descritas são propostas técnicas; não há evidência de que tenham sido executadas em um sistema real.
