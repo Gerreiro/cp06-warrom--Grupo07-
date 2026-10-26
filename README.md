@@ -1,426 +1,394 @@
-🌙 FIAP Bank — O Turno da Noite
-Simulação de incidentes críticos em um sistema bancário na véspera da Black Friday.
-📌 Sobre o projeto
+# 🌙 FIAP Bank — O Turno da Noite
 
-Integrantes - Samuel da Silva Nunes - RM 564435
-              Miguel Vanucci Delgado - RM563491
-              JOAO VITOR LIMA CALDEIRA - RM566541
-              Henry dos Santos Lima - RM565309
+**Simulação de incidentes críticos em um sistema bancário na véspera da Black Friday**  
+**Entrega:** registro das decisões das rodadas e relatório pós-mortem (3ª aula)
 
-Este documento registra três incidentes enfrentados pela equipe de desenvolvimento durante o plantão noturno do FIAP Bank.
+## 👥 Integrantes
 
-Os problemas envolvem integridade financeira, segurança de consultas ao banco de dados e unicidade dos números de conta. O objetivo é identificar as causas, escolher soluções adequadas e reduzir o risco de recorrência.
+- Samuel da Silva Nunes — RM 564435
+- Miguel Vanucci Delgado — RM 563491
+- João Vitor Lima Caldeira — RM 566541
+- Henry dos Santos Lima — RM 565309
 
-🎯 Objetivos
-Impedir transferências sem saldo suficiente.
-Proteger consultas contra SQL Injection.
-Garantir identificadores únicos para as contas.
-Implementar testes automatizados para regras críticas.
-Priorizar a integridade dos dados e a segurança dos clientes.
-💸 Rodada 1 — O saldo que virou negativo
+## 📌 Sobre o projeto
 
-Horário: 19h12
+Este README documenta o percurso do grupo durante seis rodadas e um evento relâmpago da simulação **O Turno da Noite**. As situações envolveram transferências financeiras, consultas ao banco, geração de números de conta, integridade de extratos, criação de objetos e testes. Para cada decisão, registramos o **tipo**, o **voto**, a **justificativa com mecanismo técnico e trade-off** e o **placar acumulado**, conforme o modelo pedido pelo professor.
 
-Problema
+**Objetivos:** preservar a integridade financeira; prevenir SQL Injection; garantir identificadores únicos; manter os comprovantes consistentes; tratar falhas próximo à origem; e respeitar testes e contratos de negócio.
 
-Três clientes apresentaram saldo negativo após transferências. Uma das contas ficou com saldo de R$ 8.940,00 negativos.
+> **Legenda do placar:** 🔥, 💰 e 🧹 são os indicadores **da simulação**. Valores de 💰 são pontos do jogo, não valores em reais. O placar abaixo é acumulado, começando em 0 · 0 · 0. As consequências descritas correspondem ao enunciado da atividade, não a um deploy real verificado.
 
-A causa está no tratamento inadequado da exceção de saldo insuficiente:
+## 📊 Resumo das decisões e placar
 
+| Etapa | Horário | Voto | Variação 🔥 | Variação 💰 | Variação 🧹 | Placar acumulado (🔥 / 💰 / 🧹) |
+|---|---|:---:|---:|---:|---:|---|
+| Rodada 1 — Saldo negativo | 19h12 | C | +1 | +35 | −1 | **1 / 35 / −1** |
+| Rodada 2 — SQL Injection | 21h02 | D | 0 | 0 | −1 | **1 / 35 / −2** |
+| Rodada 3 — Contas duplicadas | 22h50 | D | 0 | +10 | 0 | **1 / 45 / −2** |
+| Rodada 4 — Extratos invertidos | 00h47 | B | +1 | +25 | −1 | **2 / 70 / −3** |
+| Rodada 5 — Factory com `null` | 01h30 | A | −1 | 0 | 0 | **1 / 70 / −3** |
+| Relâmpago C — Builder | 02h20 | B | 0 | 0 | 0 | **1 / 70 / −3** |
+| Rodada 6 — Teste vermelho | 03h45 | B | −1 | +30 | −1 | **0 / 100 / −4** |
+
+**Resultado final:** 🔥 **0** · 💰 **100** · 🧹 **−4**.
+
+**Eventos condicionais não aplicáveis:** Relâmpago A (exigia R1 = D), Relâmpago B (exigia R2 = A) e Relâmpago D (exigia R2 = A ou C). O grupo participou do **Relâmpago C** porque escolheu **A na R5**.
+
+---
+
+## 💸 Rodada 1 — O saldo que virou negativo (19h12)
+
+**Tipo:** rodada · **Voto:** C
+
+**Justificativa:** `TransferenciaService.realizar()` lançava `SaldoInsuficienteException`, mas o `catch` ignorava a exceção e permitia que `origem.debitar(valor + taxa)` fosse executado. Escolhemos remover esse tratamento e escrever um teste com `assertThrows` antes da liberação. **Trade-off:** a correção com teste consumiu **40 minutos adicionais**, e **oito clientes foram afetados no total**, porém a suíte passou a proteger a regra de não transferir sem saldo.
+
+**Placar do grupo após esta decisão:** 🔥 **1** · 💰 **35** · 🧹 **−1**
+
+### Evidência e causa técnica
+
+Três clientes apresentaram saldo negativo; um registrou **−R$ 8.940,00**. A API retornava sucesso para uma transferência que deveria ter sido recusada.
+
+```java
 try {
     if (origem.getSaldo() < valor + taxa) {
-        throw new SaldoInsuficienteException(
-            "Saldo insuficiente"
-        );
+        throw new SaldoInsuficienteException("Saldo insuficiente");
     }
 } catch (SaldoInsuficienteException e) {
     // Exceção ignorada
 }
-
 origem.debitar(valor + taxa);
+```
 
+### Correção proposta
 
-A exceção é capturada e ignorada, permitindo que o débito seja executado mesmo quando o saldo não é suficiente.
-
-Decisão
-
-Opção C — Corrigir a regra e escrever o teste antes de liberar a alteração.
-
-Correção proposta
+```java
 if (origem.getSaldo() < valor + taxa) {
-    throw new SaldoInsuficienteException(
-        "Saldo insuficiente"
-    );
+    throw new SaldoInsuficienteException("Saldo insuficiente");
 }
-
 origem.debitar(valor + taxa);
 destino.creditar(valor);
+```
 
-
-O débito só deve ocorrer após a validação do saldo.
-
-Teste automatizado
+```java
 @Test
 void deveRecusarTransferenciaSemSaldo() {
-    assertThrows(
-        SaldoInsuficienteException.class,
-        () -> service.realizar(
-            origem, destino, 100.0, 5.0
-        )
-    );
+    assertThrows(SaldoInsuficienteException.class,
+        () -> service.realizar(origem, destino, 100.0, 5.0));
 }
+```
 
+O teste também deve conferir que **ambos os saldos permanecem inalterados** após uma tentativa recusada. Investigar e reconciliar as contas afetadas, incluindo eventuais operações concluídas indevidamente.
 
-O teste também deve confirmar que os saldos de origem e destino permanecem inalterados após uma tentativa recusada.
+**Aprendizado:** não se deve capturar e ignorar uma exceção que protege uma regra financeira.
 
-Plano de ação
-Conter temporariamente novas transferências indevidas, se necessário.
-Remover o tratamento que ignora a exceção.
-Testar saldo insuficiente, saldo exato e saldo suficiente.
-Investigar as contas afetadas e reconciliar os valores.
-Executar a suíte de regressão antes do deploy.
-Aprendizado
+---
 
-Exceções que representam violações de regras financeiras não devem ser ignoradas. Uma operação recusada precisa falhar sem produzir alterações indevidas nos saldos.
+## 🔐 Rodada 2 — A injeção que derreteu o banco (21h02)
 
-🔐 Rodada 2 — A injeção que derreteu o banco
+**Tipo:** rodada · **Voto:** D
 
-Horário: 21h02
+**Justificativa:** a busca por titular montava SQL por concatenação da entrada do usuário, permitindo alterar a lógica da consulta. Escolhemos utilizar `ContaRepository.findByTitular`, uma **derived query** já disponível no Spring Data JPA, para tratar o nome como valor parametrizado. **Trade-off:** cerca de **50 minutos de correção** (mais que os ~40 minutos da opção com `PreparedStatement`), em troca de aproveitar a arquitetura existente e **reduzir a dívida técnica**.
 
-Problema
+**Placar do grupo após esta decisão:** 🔥 **1** · 💰 **35** · 🧹 **−2**
 
-O endpoint de busca por titular utiliza concatenação de strings para construir uma consulta SQL.
+### Evidência e causa técnica
 
-String sql =
-    "SELECT * FROM contas WHERE titular = '" + nome + "'";
+O monitoramento apontou **latência p95 de 8,4 segundos** e crescimento nas requisições. Uma entrada como `OR '1'='1` permitiu o retorno de todas as contas.
 
+```java
+String sql = "SELECT * FROM contas WHERE titular = '" + nome + "'";
 Statement stmt = connection.createStatement();
 ResultSet rs = stmt.executeQuery(sql);
+```
 
+### Correção proposta
 
-Uma entrada maliciosa pode modificar a estrutura da consulta e retornar dados que não deveriam ser acessíveis.
-
-O monitoramento também registrou latência p95 de 8,4 segundos e aumento no volume de requisições.
-
-Decisão
-
-Opção D — Utilizar a derived query findByTitular do Spring Data JPA.
-
-O repositório já possui um método apropriado, evitando a necessidade de montar manualmente a consulta SQL.
-
-Correção proposta
-public interface ContaRepository
-        extends JpaRepository<Conta, Long> {
-
+```java
+public interface ContaRepository extends JpaRepository<Conta, Long> {
     List<Conta> findByTitular(String titular);
 }
+```
 
-
-No serviço:
-
+```java
 public List<Conta> buscarPorTitular(String titular) {
     return contaRepository.findByTitular(titular);
 }
+```
 
+Testar entradas normais e maliciosas, verificar possíveis acessos indevidos em logs e acompanhar a latência após a alteração.
 
-O Spring Data JPA gera a consulta e trata o titular como um valor, em vez de permitir que a entrada seja incorporada diretamente à sintaxe SQL.
+**Aprendizado:** parametrização protege a estrutura da consulta; bloquear caracteres suspeitos manualmente não é proteção equivalente.
 
-Plano de ação
-Substituir a consulta vulnerável pela derived query.
-Confirmar que o endpoint utiliza o método seguro.
-Restringir temporariamente o endpoint se a correção não puder ser implantada imediatamente.
-Criar testes com nomes comuns, aspas e entradas maliciosas.
-Verificar logs e investigar possível exposição de dados.
-Monitorar latência e volume de requisições após a correção.
-Aprendizado
+---
 
-Consultas parametrizadas são essenciais para prevenir SQL Injection. A validação de entradas pode complementar a proteção, mas não substitui a parametrização.
+## 🔢 Rodada 3 — A noite das contas gêmeas (22h50)
 
-🔢 Rodada 3 — A noite das contas gêmeas
+**Tipo:** rodada · **Voto:** D
 
-Horário: 22h50
+**Justificativa:** o método `getInstancia()` criava um novo gerador em toda chamada, reiniciando a numeração em 1001 e produzindo duplicidades. Decidimos delegar a numeração ao banco por uma **sequence**, evitando depender do estado de um Singleton na aplicação. **Trade-off:** a migração exigiu **aproximadamente uma hora** e **+10 pontos de impacto financeiro**, mas estabeleceu uma estratégia centralizada, mais robusta para concorrência e reinicializações.
 
-Problema
+**Placar do grupo após esta decisão:** 🔥 **1** · 💰 **45** · 🧹 **−2**
 
-Clientes diferentes receberam o mesmo número de conta, 1001.
+### Evidência e causa técnica
 
-A causa está no método que deveria implementar o padrão Singleton:
+Clientes diferentes receberam o número **1001**.
 
+```java
 public static GeradorNumeroConta getInstancia() {
-    return new GeradorNumeroConta();
+    return new GeradorNumeroConta(); // sempre uma nova instância
 }
+```
 
+### Correção proposta
 
-O método cria uma nova instância a cada chamada. Se o contador é reiniciado no construtor, diferentes instâncias podem gerar números repetidos.
+Exemplo em PostgreSQL (a sequência inicial exige auditoria dos números já cadastrados):
 
-Decisão
-
-Opção D — Delegar a geração dos números ao banco de dados.
-
-Uma sequence centralizada é mais robusta do que depender exclusivamente de um contador mantido na aplicação.
-
-Exemplo com PostgreSQL
-CREATE SEQUENCE conta_numero_seq
-    START WITH 1002
-    INCREMENT BY 1;
-
-
-Para obter um novo número:
-
+```sql
+CREATE SEQUENCE conta_numero_seq START WITH 1002 INCREMENT BY 1;
 SELECT nextval('conta_numero_seq');
+```
 
+Também recomendamos, **após tratar as duplicatas existentes**, uma restrição de unicidade:
 
-O valor inicial é ilustrativo. Antes da implantação, é necessário auditar os números existentes e definir um ponto de partida seguro.
+```sql
+ALTER TABLE contas ADD CONSTRAINT uk_contas_numero UNIQUE (numero);
+```
 
-Proteção adicional
+A sequence reduz o risco de novos números repetidos; **não corrige sozinha as duplicidades e extratos já existentes**. É preciso auditar as contas afetadas e testar aberturas simultâneas.
 
-A coluna que armazena o número da conta deve possuir uma restrição de unicidade, para que o próprio banco rejeite duplicidades.
+**Aprendizado:** um Singleton dentro da aplicação não é garantia suficiente de unicidade em ambientes distribuídos.
 
-Exemplo conceitual:
+---
 
-ALTER TABLE contas
-ADD CONSTRAINT uk_contas_numero UNIQUE (numero);
+## 🧾 Rodada 4 — O comprovante que aponta para a pessoa errada (00h47)
 
+**Tipo:** rodada · **Voto:** B
 
-A restrição só deve ser criada após identificar e resolver as duplicidades existentes.
+**Justificativa:** o serviço movimentava os saldos corretamente, mas registrava origem e destino invertidos no histórico. Escolhemos corrigir a ordem dos parâmetros e **reprocessar os extratos anteriores**, sem movimentar novamente o dinheiro. **Trade-off:** aproximadamente **duas horas** e **+25 pontos de impacto financeiro**, porém a solução também corrige a inconsistência histórica e reduz a dívida técnica.
 
-Plano de ação
-Conter temporariamente novas aberturas de conta se a unicidade não puder ser garantida.
-Auditar os números duplicados.
-Identificar os titulares e as operações vinculadas a cada registro.
-Implementar uma estratégia centralizada de geração de números.
-Adicionar uma restrição UNIQUE.
-Testar a criação simultânea de contas e o comportamento após reinicializações.
-Aprendizado
+**Placar do grupo após esta decisão:** 🔥 **2** · 💰 **70** · 🧹 **−3**
 
-Corrigir o Singleton pode resolver o defeito imediato dentro de uma instância da aplicação, mas não garante unicidade entre vários servidores ou após reinicializações. A estratégia de identificação precisa considerar concorrência e persistência.
+### Evidência e causa técnica
 
-🧪 Estratégia de testes
+Ana (conta 1001) transferiu para Bob (conta 1002), mas o comprovante indicava o caminho inverso.
 
-A suíte de testes deve cobrir, no mínimo:
-
-Área	Cenário
-Transferências	Recusar operações sem saldo suficiente
-Transferências	Preservar os saldos quando a operação falha
-Segurança	Rejeitar tentativas de alterar a consulta por meio de SQL Injection
-Consultas	Retornar somente os registros correspondentes ao titular
-Numeração	Impedir números de conta duplicados
-Concorrência	Criar contas simultaneamente sem repetir identificadores
-🚀 Validação antes do deploy
-
-Executar a suíte automatizada:
-
-./mvnw clean test
-
-
-Antes da liberação, revisar as alterações, verificar os testes relevantes e confirmar que os incidentes não introduziram novas falhas.
-
-Se a correção não puder ser validada com segurança, a equipe deve conter o risco e escalar a decisão operacional, em vez de liberar uma versão sabidamente vulnerável.
-
-📋 Resumo das decisões
-Rodada	Incidente	Decisão
-1	Saldo negativo	C — Corrigir e testar
-2	SQL Injection	D — Usar derived query
-3	Contas duplicadas	D — Delegar ao banco
-📚 Conclusão
-
-Os incidentes demonstram que um sistema bancário confiável depende de três pilares:
-
-Integridade financeira: operações devem respeitar as regras de saldo e preservar os dados quando falham.
-Segurança: entradas dos usuários não podem alterar a estrutura das consultas ao banco.
-Consistência dos dados: identificadores devem ser únicos mesmo sob concorrência e reinicializações.
-
-A prioridade do plantão é corrigir a causa raiz, proteger os clientes, preservar os registros para auditoria e validar cada alteração antes da implantação.
-
-Projeto: FIAP Bank
-Contexto: Simulação de plantão noturno
-Tecnologias abordadas: Java, Spring Data JPA, JDBC, SQL e JUnit
-
-FIAP Bank — Plantão de Incidentes
-Simulação de incidentes técnicos durante a preparação para a Black Friday.
-📌 Sobre o projeto
-
-Este documento reúne as decisões técnicas tomadas durante o plantão de incidentes do FIAP Bank. O objetivo é corrigir falhas, preservar a integridade dos dados financeiros e garantir que as entregas respeitem os contratos com os clientes.
-
-🎯 Objetivos
-Corrigir inconsistências nos registros de transferências.
-Melhorar o tratamento de erros na criação de contas.
-Permitir a construção flexível de objetos sem comprometer sua validade.
-Garantir que as taxas cobradas respeitem as regras de negócio.
-Evitar deploys com falhas conhecidas em funcionalidades financeiras.
-🔄 Rodada 4 — O comprovante que aponta para a pessoa errada
-
-Horário: 00h47
-
-Problema
-
-O sistema realiza a transferência corretamente, mas registra os números de origem e destino invertidos no extrato.
-
+```java
 Transferencia extrato = new Transferencia(
     tipo,
-    destino.getNumero(),
-    origem.getNumero(),
+    destino.getNumero(), // incorreto: deveria ser origem
+    origem.getNumero(),  // incorreto: deveria ser destino
     valor,
     taxa
 );
+```
 
+### Correção proposta
 
-Os saldos estão corretos, porém o histórico apresenta informações incorretas sobre quem enviou e quem recebeu o dinheiro.
+```java
+Transferencia extrato = new Transferencia(
+    tipo,
+    origem.getNumero(),
+    destino.getNumero(),
+    valor,
+    taxa
+);
+```
 
-Decisão
+Identificar registros afetados, corrigir **somente as informações do extrato**, verificar saldos e trilha de auditoria e disponibilizar comprovantes consistentes.
 
-Opção B — Corrigir a gravação e reprocessar os extratos antigos.
+**Aprendizado:** integridade financeira envolve também rastreabilidade e confiabilidade dos registros históricos.
 
-Solução
-Corrigir a ordem dos números de origem e destino.
-Identificar os registros históricos afetados.
-Corrigir os extratos sem movimentar novamente o dinheiro.
-Validar a integridade dos registros e dos saldos.
-Comunicar os clientes afetados e disponibilizar comprovantes corrigidos.
-Aprendizado
+---
 
-A integridade financeira não depende apenas dos saldos. Os registros históricos também precisam refletir corretamente as operações realizadas.
+## 🏭 Rodada 5 — A fábrica que devolve null (01h30)
 
-🏭 Rodada 5 — A fábrica que devolve null
+**Tipo:** rodada · **Voto:** A
 
-Horário: 01h30
+**Justificativa:** a `ContaFactory` retornava `null` para tipos não reconhecidos, e o erro só aparecia no `save()` do repositório, distante da causa real. Escolhemos **fail-fast**, lançando uma exceção explícita na própria Factory. **Trade-off:** o erro fica claro em cerca de **30 minutos**, sem penalidade no indicador de dívida técnica, **mas a opção A não implementa a conta `UNIVERSITARIA`**: o cadastro desse produto continua indisponível enquanto o tipo não for adicionado corretamente.
 
-Problema
+**Placar do grupo após esta decisão:** 🔥 **1** · 💰 **70** · 🧹 **−3**
 
-A campanha de Conta Universitária com cashback entra no ar, mas a criação da conta falha com o erro:
+### Evidência e causa técnica
 
-Entity must not be null
+O cadastro `POST /api/contas` com tipo `UNIVERSITARIA` causava `Entity must not be null`.
 
+```java
+return switch (tipo) {
+    case "CORRENTE" -> new Corrente(...);
+    case "POUPANCA" -> new Poupanca(...);
+    default -> null;
+};
+```
 
-A causa está na factory, que não reconhece o tipo UNIVERSITARIA e retorna null.
+### Correção proposta
 
-default -> null;
+```java
+return switch (tipo) {
+    case "CORRENTE" -> new Corrente(...);
+    case "POUPANCA" -> new Poupanca(...);
+    default -> throw new IllegalArgumentException(
+        "Tipo de conta inválido: " + tipo);
+};
+```
 
+**Ação futura importante:** implementar e testar o caso `UNIVERSITARIA`, já que a campanha anunciou esse produto como disponível. A API deve retornar uma resposta apropriada ao cliente, em vez de expor detalhes internos.
 
-O erro só aparece posteriormente, durante a persistência no repositório.
+**Aprendizado:** identificar um erro na origem facilita diagnóstico, mas não substitui a implementação da funcionalidade faltante.
 
-Decisão
+---
 
-Opção A — Fail-fast, com tratamento explícito dos tipos não suportados.
+## ⚡ Evento relâmpago C — O cadastro com metade dos campos (02h20)
 
-A decisão precisa incluir a implementação do tipo UNIVERSITARIA, já que ele é anunciado como um produto válido.
+**Tipo:** relâmpago · **Voto:** B
 
-Solução
-public Conta criar(String tipo) {
-    return switch (tipo) {
-        case "CORRENTE" -> new Corrente(...);
-        case "POUPANCA" -> new Poupanca(...);
-        case "UNIVERSITARIA" -> new Universitaria(...);
-        default -> throw new IllegalArgumentException(
-            "Tipo de conta inválido ou não suportado: " + tipo
-        );
-    };
-}
+**Justificativa:** o marketing pediu cadastro com menos campos, enquanto o construtor atual exigia vários argumentos. Escolhemos o padrão **Builder**, que permite configurar campos gradualmente e concentrar valores padrão e validações no `build()`. **Trade-off:** acrescenta uma camada de construção, mas evita a proliferação de construtores e o uso indiscriminado de `null`; a opção não altera a dívida técnica no placar.
 
-Ações complementares
-Validar o tipo de conta recebido pela API.
-Retornar mensagens de erro claras e apropriadas.
-Criar testes para todos os tipos suportados.
-Impedir que uma conta desconhecida seja substituída silenciosamente por outro tipo.
-Aprendizado
+**Placar do grupo após esta decisão:** 🔥 **1** · 💰 **70** · 🧹 **−3**
 
-Uma factory não deve retornar null silenciosamente quando não consegue criar um objeto. Erros devem ser detectados próximos à sua origem.
+### Exemplo conceitual
 
-⚡ Evento Relâmpago C — O cadastro com metade dos campos
-
-Horário: 02h20
-
-Problema
-
-O marketing deseja permitir cadastros informando apenas nome e saldo, enquanto o construtor atual exige todos os campos.
-
-Decisão
-
-Opção B — Builder com valores padrão.
-
-Exemplo
+```java
 Conta conta = Conta.builder()
     .nome(nome)
     .saldo(saldo)
     .build();
+```
 
-Diretrizes de implementação
-Permitir a configuração gradual dos campos.
-Definir valores padrão somente para campos realmente opcionais.
-Validar os campos obrigatórios durante a construção.
-Confirmar as regras de negócio para CPF e tipo de conta.
-Não permitir que campos ausentes gerem objetos inválidos.
-Aprendizado
+Os valores padrão devem ser usados **somente onde as regras permitirem**. Campos obrigatórios, como identificações exigidas para uma conta bancária válida, não devem ser omitidos sem aprovação da regra de negócio.
 
-O padrão Builder melhora a legibilidade e a flexibilidade da criação de objetos. Entretanto, flexibilidade não significa aceitar dados inválidos.
+**Aprendizado:** flexibilidade na construção não significa aceitar objetos inválidos.
 
-💸 Rodada 6 — O teste vermelho
+---
 
-Horário: 03h45
+## 🧪 Rodada 6 — O teste vermelho às 03h45 (janela fecha às 04h)
 
-Prazo da janela de deploy: 04h00
+**Tipo:** rodada · **Voto:** B
 
-Problema
+**Justificativa:** o teste de TED esperava **R$ 5,00**, conforme contrato, mas a implementação cobrava **R$ 50,00**. Escolhemos **investigar a falha e não mascará-la** com `@Disabled`, alterando a expectativa do teste ou liberando a suíte vermelha. **Trade-off:** **perdemos a janela das 04h00**, de modo que as correções da noite só poderiam entrar **depois da abertura da campanha**, e recebemos **+30 pontos de impacto financeiro**; por outro lado, preservamos um teste válido e identificamos a divergência contratual real.
 
-A suíte de testes apresenta uma falha:
+**Placar do grupo após esta decisão:** 🔥 **0** · 💰 **100** · 🧹 **−4**
 
+### Evidência e causa técnica
+
+```text
 Tests run: 13, Failures: 1
-
 TransferenciaServiceTest.tedDeveCobrarTaxaDe5Reais:
 expected: <5.0> but was: <50.0>
+```
 
+```java
+@Test
+void tedDeveCobrarTaxaDe5Reais() {
+    assertEquals(5.0, service.calcularTaxa("TED"), 0.0001);
+}
+```
 
-O contrato com o cliente estabelece uma taxa de TED de R$ 5,00, mas o serviço utiliza R$ 50,00.
+### Correção proposta
 
-Decisão
-
-Opção B — Investigar o problema e não liberar uma versão incorreta.
-
-Correção
+```java
 private static final double TAXA_TED = 5.00;
+```
 
+Confirmar a regra contratual, corrigir o valor no código e executar toda a suíte antes de uma nova liberação. Em sistemas monetários reais, utilizar `BigDecimal` para cálculos de dinheiro.
 
-A implementação deve utilizar a taxa definida no contrato e preservar o teste existente.
+**Aprendizado:** um teste vermelho que revela quebra de contrato não deve ser desabilitado ou alterado apenas para liberar a aplicação.
 
-Em código financeiro de produção, prefira BigDecimal para representar valores monetários.
-Plano de ação
-Confirmar a regra de negócio da taxa TED.
-Investigar a origem do valor incorreto.
-Corrigir a implementação.
-Executar os testes unitários e de regressão.
-Verificar as demais modalidades de transferência.
-Se a validação não terminar a tempo, escalar a decisão de lançamento para a liderança.
-Aprendizado
+---
 
-Não se deve desabilitar um teste válido nem alterar sua expectativa apenas para acomodar um defeito. A pressão por prazo não elimina a obrigação de respeitar o contrato financeiro.
+# 🌅 3ª aula — Relatório pós-mortem
 
-🧪 Estratégia de testes
+## 1. Linha do tempo da madrugada
 
-O projeto deve incluir testes para:
+| Horário | Fato e consequência da escolha do grupo |
+|---|---|
+| **19h12** | Saldo negativo: opção **C** corrigiu o fluxo e acrescentou teste, mas o tempo adicional levou a **8 clientes afetados no total**. |
+| **20h10** | Relâmpago A **não aplicável**: só ocorreria se tivéssemos escolhido rollback (D) na R1. |
+| **21h02** | SQL Injection: opção **D** substituiu a consulta vulnerável por derived query, com ~50 min de implementação. |
+| **22h40** | Relâmpago B **não aplicável**: dependia da escolha A na R2. |
+| **22h50** | Contas duplicadas: opção **D** escolheu uma sequence no banco, com ~1 h de migração. |
+| **00h47** | Extratos invertidos: opção **B** corrigiu novos registros e o histórico, com ~2 h de reprocessamento. |
+| **01h30** | Factory retornando `null`: opção **A** adotou fail-fast, mas ainda faltava implementar o produto universitário. |
+| **02h20** | Relâmpago C: opção **B** escolheu Builder para organizar parâmetros opcionais e validações. |
+| **03h20** | Relâmpago D **não aplicável**: dependia de A ou C na R2. |
+| **03h45** | Teste TED vermelho: opção **B** preservou o teste e investigou a taxa incorreta. |
+| **04h00** | **Janela perdida**: as correções planejadas ficam para depois da abertura da campanha. |
 
-Transferências com origem e destino corretos.
-Preservação dos saldos durante a correção dos extratos.
-Criação de contas correntes, poupanças e universitárias.
-Rejeição explícita de tipos de conta inválidos.
-Construção de objetos com campos opcionais e obrigatórios.
-Cálculo correto das taxas de transferência.
-Regressão das funcionalidades afetadas pelas correções.
-🚀 Validação antes do deploy
+## 2. O caminho do grupo: escolhas, causas e consequências
 
-Antes de liberar uma versão, executar:
+A equipe adotou, em geral, decisões orientadas à **correção da causa técnica**, mesmo quando isso exigia mais tempo. Na primeira rodada, preferimos um teste de regressão a um hotfix sem cobertura. Na segunda, escolhemos a abstração existente do repositório, eliminando o SQL construído manualmente. Na terceira, preferimos uma numeração centralizada no banco em vez de confiar apenas em um Singleton.
 
-./mvnw clean test
+Na quarta rodada, optamos por reparar também o histórico dos comprovantes, não apenas os novos registros. Na quinta, fizemos o erro aparecer na Factory por meio de fail-fast; reconhecemos que **isso não entregava o produto universitário**, que ainda necessitava de implementação. No relâmpago C, escolhemos Builder com defaults controlados. Por fim, **na rodada 6 decidimos investigar o teste vermelho**, aceitando perder a janela de deploy em vez de permitir que uma taxa em desacordo com o contrato fosse tratada como correta.
 
+**Efeito agregado do caminho:** 🔥 **0**, 💰 **100**, 🧹 **−4**. O saldo negativo de dívida técnica é favorável dentro das regras da simulação, mas o placar não elimina o atraso de lançamento nem as pendências técnicas identificadas.
 
-A liberação deve ocorrer somente após a validação dos testes relevantes, a revisão das alterações e a confirmação de que as regras financeiras estão sendo respeitadas.
+## 3. Causa raiz de dois incidentes
 
-📚 Conclusão
+### Incidente A — Saldo negativo (rodada 1)
 
-As rodadas demonstram a importância de quatro princípios fundamentais:
+**Aula/conceitos:** exceções em Java, fluxo de controle, regras de negócio e testes com JUnit.
 
-Integridade dos dados: os registros devem representar fielmente as operações realizadas.
-Tratamento explícito de erros: falhas devem ser detectadas e comunicadas de forma clara.
-Objetos válidos: padrões de construção flexíveis não devem eliminar as validações necessárias.
-Testes confiáveis: os testes devem proteger as regras de negócio, e não ser alterados para esconder defeitos.
+- **Causa raiz:** um `catch (SaldoInsuficienteException)` suprimia a exceção, e o programa prosseguia para `origem.debitar(valor + taxa)`.
+- **Mecanismo:** a violação de saldo era detectada, mas não interrompia a operação. O débito seguia mesmo quando a transferência deveria falhar.
+- **Impacto na simulação:** oito clientes afetados no total após a decisão C; um dos saldos observados era de **−R$ 8.940,00**.
+- **Prevenção:** propagar a exceção, testar `assertThrows`, verificar saldos inalterados e rodar regressão antes de qualquer deploy.
 
-No contexto bancário, uma solução tecnicamente funcional também precisa ser segura, rastreável e consistente com o que foi prometido ao cliente.
+### Incidente B — SQL Injection (rodada 2)
+
+**Aula/conceitos:** JDBC, composição de SQL, parametrização e Spring Data JPA.
+
+- **Causa raiz:** a entrada do usuário era concatenada diretamente em `SELECT * FROM contas WHERE titular = '...'`.
+- **Mecanismo:** uma entrada como `' OR '1'='1` podia alterar o predicado SQL e fazer a consulta retornar registros além do titular solicitado.
+- **Impacto na simulação:** o banco chegou a retornar todas as contas e o monitoramento indicou p95 de 8,4 s.
+- **Prevenção:** utilizar `findByTitular`, testar entradas hostis e auditar os logs para avaliar possível acesso indevido.
+
+## 4. O que faríamos diferente em duas rodadas
+
+### Rodada 1 — Conter a exposição enquanto corrigimos
+
+**Nossa escolha original:** C, correção com teste.
+
+**Mudança proposta:** manter o desenvolvimento com teste, mas introduzir **contenção temporária e direcionada** no fluxo vulnerável, com comunicação operacional aos responsáveis, enquanto a alteração definitiva é validada. Priorizaríamos a reconciliação das contas afetadas.
+
+**Motivo:** os 40 minutos adicionais resultaram em novos clientes afetados. A contenção poderia reduzir esse risco; por outro lado, bloquear transferências tem custo operacional e precisa ser usado apenas enquanto necessário.
+
+### Rodada 6 — Antecipar os testes de contrato
+
+**Nossa escolha original:** B, investigar e perder a janela.
+
+**Mudança proposta:** executar a suíte completa e os testes de regras financeiras durante toda a madrugada, incluindo uma checagem antecipada da taxa TED de R$ 5,00, em vez de descobrir o defeito às 03h45.
+
+**Motivo:** detectar o teste vermelho mais cedo daria margem para investigar e corrigir com segurança antes das 04h00. Se ainda restasse uma divergência contratual, manteríamos a decisão de **não liberar** uma versão incorreta.
+
+## 5. Apresentação relâmpago — “A madrugada do nosso grupo” (2 a 3 minutos)
+
+**Samuel — Introdução, R1 e R2 (~40 s)**  
+“Nosso grupo assumiu o plantão do FIAP Bank na véspera da Black Friday. O primeiro incidente permitia transferências sem saldo, porque uma exceção era ignorada. Escolhemos corrigir e escrever um teste, apesar do tempo adicional e dos oito clientes afetados. Depois, encontramos uma SQL Injection na busca por titular. Preferimos a derived query do Spring Data JPA, pois ela aproveitava a arquitetura existente e evitava montar SQL com a entrada do usuário.”
+
+**Miguel — R3 e R4 (~35 s)**  
+“Na terceira rodada, duas contas tinham o mesmo número porque o suposto Singleton criava um novo gerador a cada chamada. Escolhemos transferir a numeração para uma sequence no banco. Mais tarde, os extratos exibiam remetente e destinatário invertidos, embora os saldos estivessem certos. Decidimos corrigir a gravação e reprocessar os registros antigos para recuperar a confiabilidade do histórico.”
+
+**João — R5 e relâmpago C (~35 s)**  
+“Na quinta rodada, a Factory devolvia `null` para a conta universitária, e o erro aparecia só ao salvar. Usamos fail-fast para mostrar a causa imediatamente, mas entendemos que ainda seria necessário implementar esse tipo de conta. Em seguida, o marketing pediu um cadastro com menos campos. Escolhemos Builder, concentrando valores padrão e validações no momento de criar o objeto.”
+
+**Henry — R6, placar e conclusão (~40 s)**  
+“Às 03h45, descobrimos que a TED cobrava cinquenta reais, embora o contrato exigisse cinco. Escolhemos investigar, sem desabilitar o teste nem alterar a expectativa, e acabamos perdendo a janela das quatro horas. Nosso placar terminou em zero de fogo, cem pontos de impacto financeiro e menos quatro de dívida técnica. Aprendemos que testes, segurança e integridade de dados precisam valer mais do que um deploy apressado.”
+
+## 6. Go/No-Go e conclusão
+
+**Resultado na simulação: NO-GO na janela das 04h00.** A escolha B da rodada 6 implicou perder a janela; as correções da noite só poderiam entrar depois da abertura da campanha. Isso **não comprova que um deploy posterior foi realizado**, nem que a conta universitária já foi implementada.
+
+Nossas escolhas privilegiaram integridade de saldos, segurança das consultas, numeração consistente, rastreabilidade dos comprovantes e testes confiáveis. O custo foi tempo e impacto financeiro no jogo. Para um próximo plantão, adotaríamos contenção de incidentes mais cedo, verificação antecipada das regras financeiras e uma lista clara de pendências antes de liberar novas versões.
+
+## 7. Próximas ações técnicas
+
+- Auditar e reconciliar transferências que geraram saldos negativos.
+- Investigar possível exposição de dados no episódio de SQL Injection.
+- Auditar contas duplicadas antes de implantar `UNIQUE` e inicializar a sequence com segurança.
+- Validar a reconstrução dos extratos sem repetir movimentações financeiras.
+- Implementar e testar explicitamente o tipo `UNIVERSITARIA` na Factory.
+- Verificar quais campos do cadastro podem receber defaults sem violar regras do produto.
+- Corrigir a taxa TED conforme o contrato e executar testes unitários e de regressão (`./mvnw clean test`) antes da próxima liberação.
+
+---
+
+**Nota:** documento preparado com base nas decisões registradas pelo grupo e nas consequências apresentadas nos enunciados das seis rodadas. As correções de código descritas são propostas técnicas; não há evidência de que tenham sido executadas em um sistema real.
